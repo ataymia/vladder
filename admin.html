@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VLadder Admin</title>
     <link rel="stylesheet" href="./styles.css" />
-    <script src="./config.js"></script>
   </head>
   <body>
     <div class="page-shell">
@@ -14,18 +13,57 @@
           <h1>Admin Dashboard</h1>
           <p class="subtext">Manage team stats and appointment submissions for VLadder.</p>
         </div>
-        <a class="admin-link" href="./index.html">Team Leaderboard</a>
+        <div class="hero-actions">
+          <p id="admin-session-label" class="session-pill hidden"></p>
+          <button type="button" id="logout-button" class="secondary hidden">Log Out</button>
+          <a class="admin-link" href="./index.html">Team Leaderboard</a>
+        </div>
       </header>
 
       <main class="admin-layout">
-        <section id="admin-gate" class="panel">
+        <section id="admin-loading" class="panel">
+          <h2>Checking Access</h2>
+          <p class="subtext">Checking Firebase setup, bootstrap state, and your admin session.</p>
+          <p id="admin-loading-status" class="status"></p>
+        </section>
+
+        <section id="admin-setup" class="panel hidden">
+          <h2>Create First Admin</h2>
+          <p class="subtext">This one-time setup creates the first authenticated VLadder admin.</p>
+          <form id="admin-setup-form" class="stack" novalidate>
+            <label>
+              Name
+              <input id="setup-name" type="text" autocomplete="name" required />
+            </label>
+            <label>
+              Email
+              <input id="setup-email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              Password
+              <input id="setup-password" type="password" autocomplete="new-password" required />
+            </label>
+            <label>
+              Confirm Password
+              <input id="setup-password-confirm" type="password" autocomplete="new-password" required />
+            </label>
+            <button type="submit">Create First Admin</button>
+            <p id="admin-setup-status" class="status"></p>
+          </form>
+        </section>
+
+        <section id="admin-gate" class="panel hidden">
           <h2>Admin Access</h2>
           <form id="admin-login-form" class="stack" novalidate>
+            <label>
+              Email
+              <input id="admin-email" type="email" autocomplete="email" required />
+            </label>
             <label>
               Password
               <input id="admin-password" type="password" autocomplete="current-password" required />
             </label>
-            <button type="submit">Unlock Dashboard</button>
+            <button type="submit">Log In</button>
             <p id="admin-login-status" class="status"></p>
           </form>
         </section>
@@ -46,8 +84,10 @@
               </label>
               <label>
                 Photo / Avatar URL
-                <input id="member-photo" type="url" placeholder="https://..." required />
+                <input id="member-photo" type="url" placeholder="https://..." />
               </label>
+              <small class="hint">Paste a photo URL or leave it empty to use initials on the leaderboard.</small>
+              <div id="member-photo-preview" class="photo-preview" aria-live="polite"></div>
 
               <div class="metric-row">
                 <label>

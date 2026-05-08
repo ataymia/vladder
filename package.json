@@ -1,0 +1,9 @@
+{
+  "name": "vladder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/generate-config.mjs",
+    "deploy:rules": "firebase deploy --only firestore"
+  }
+}

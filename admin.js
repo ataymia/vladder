@@ -1,35 +1,49 @@
 import {
+  COLLECTIONS,
+  SYSTEM_DOCS,
+  auth,
   collection,
+  createUserWithEmailAndPassword,
   db,
+  deleteUser,
   doc,
   firebaseInitError,
+  getDoc,
+  onAuthStateChanged,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
+  signInWithEmailAndPassword,
+  signOut,
   updateDoc,
+  writeBatch,
 } from './firebase.js';
 
-// Internal static-site gate only. Must be changed before deployment and does not replace server-side authentication.
-const ADMIN_PASSWORD = 'SET_A_STRONG_PASSWORD';
-const ACTIVE_ADMIN_PASSWORD = (window.VLADDER_CONFIG && window.VLADDER_CONFIG.adminPassword) || ADMIN_PASSWORD;
-const ACCESS_KEY = 'vladder_admin_access';
-const DEFAULT_PHOTO =
-  (window.VLADDER_CONFIG && window.VLADDER_CONFIG.defaultPhotoUrl) ||
-  'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=240&q=80';
-
+const adminLoading = document.getElementById('admin-loading');
+const adminLoadingStatus = document.getElementById('admin-loading-status');
+const adminSetup = document.getElementById('admin-setup');
+const adminSetupForm = document.getElementById('admin-setup-form');
+const setupNameInput = document.getElementById('setup-name');
+const setupEmailInput = document.getElementById('setup-email');
+const setupPasswordInput = document.getElementById('setup-password');
+const setupPasswordConfirmInput = document.getElementById('setup-password-confirm');
+const adminSetupStatus = document.getElementById('admin-setup-status');
 const adminGate = document.getElementById('admin-gate');
 const adminConsole = document.getElementById('admin-console');
 const adminLoginForm = document.getElementById('admin-login-form');
+const adminEmailInput = document.getElementById('admin-email');
 const adminPasswordInput = document.getElementById('admin-password');
 const adminLoginStatus = document.getElementById('admin-login-status');
+const logoutButton = document.getElementById('logout-button');
+const adminSessionLabel = document.getElementById('admin-session-label');
 
 const memberForm = document.getElementById('member-form');
 const memberEditSelect = document.getElementById('member-edit-select');
 const memberNameInput = document.getElementById('member-name');
 const memberPhotoInput = document.getElementById('member-photo');
+const memberPhotoPreview = document.getElementById('member-photo-preview');
 const memberBookedInput = document.getElementById('member-booked');
 const memberDemosInput = document.getElementById('member-demos');
 const memberRevenueInput = document.getElementById('member-revenue');
@@ -45,6 +59,14 @@ const submissionStatus = document.getElementById('submission-admin-status');
 
 let members = [];
 let submissions = [];
+let activeAdminProfile = null;
+let bootstrapCompleted = false;
+let bootstrapChecked = false;
+let authStateResolved = false;
+let adminAccessCheckInFlight = false;
+let pendingLoginMessage = '';
+let unsubscribeMembers = null;
+let unsubscribeSubmissions = null;
 
 const setStatus = (target, message, isError = false) => {
   target.textContent = message;
@@ -62,6 +84,7 @@ const parseNumber = (inputValue) => {
   const parsed = Number(inputValue);
   return Number.isFinite(parsed) ? parsed : NaN;
 };
+
 const escapeHtml = (value) =>
   String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -70,6 +93,43 @@ const escapeHtml = (value) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const toggleHidden = (element, hidden) => {
+  element.classList.toggle('hidden', hidden);
+};
+
+const getInitials = (name) => {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return 'VL';
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'VL';
+};
+
+const renderAvatarMarkup = (name, extraClass = '') =>
+  `<div class="photo-preview-fallback ${extraClass}">${escapeHtml(getInitials(name))}</div>`;
+
+const renderMemberPhotoPreview = ({ name = memberNameInput.value, photoUrl = memberPhotoInput.value.trim() } = {}) => {
+  if (!photoUrl) {
+    memberPhotoPreview.innerHTML = renderAvatarMarkup(name);
+    return;
+  }
+
+  memberPhotoPreview.innerHTML = `<img class="photo-preview-image" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name || 'Team member preview')}" />`;
+  const previewImage = memberPhotoPreview.querySelector('img');
+  previewImage?.addEventListener(
+    'error',
+    () => {
+      memberPhotoPreview.innerHTML = renderAvatarMarkup(name);
+    },
+    { once: true },
+  );
+};
+
+const resetMemberFormStatus = () => setStatus(memberFormStatus, '');
+
 const clearMemberForm = () => {
   memberEditSelect.value = '';
   memberForm.reset();
@@ -77,13 +137,22 @@ const clearMemberForm = () => {
   memberDemosInput.value = '0';
   memberRevenueInput.value = '0';
   memberActiveInput.checked = true;
-  setStatus(memberFormStatus, '');
+  resetMemberFormStatus();
+  renderMemberPhotoPreview({ name: '' });
+};
+
+const stopDashboardSubscriptions = () => {
+  unsubscribeMembers?.();
+  unsubscribeSubmissions?.();
+  unsubscribeMembers = null;
+  unsubscribeSubmissions = null;
+  members = [];
+  submissions = [];
 };
 
 const renderMemberSelects = () => {
   const previousEdit = memberEditSelect.value;
   const previousFilter = filterMemberSelect.value;
-
   const sortedMembers = members.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   memberEditSelect.innerHTML = '<option value="">Create new member</option>';
@@ -119,12 +188,13 @@ const populateMemberForm = (memberId) => {
   }
 
   memberNameInput.value = member.name || '';
-  memberPhotoInput.value = member.photoUrl || DEFAULT_PHOTO;
+  memberPhotoInput.value = member.photoUrl || '';
   memberBookedInput.value = String(Number(member.bookedAppointments || 0));
   memberDemosInput.value = String(Number(member.demos || 0));
   memberRevenueInput.value = String(Number(member.estimatedRevenue || 0));
   memberActiveInput.checked = member.active !== false;
-  setStatus(memberFormStatus, '');
+  renderMemberPhotoPreview({ name: member.name, photoUrl: member.photoUrl || '' });
+  resetMemberFormStatus();
 };
 
 const applySubmissionFilters = () => {
@@ -180,9 +250,60 @@ const renderSubmissions = () => {
   });
 };
 
-const subscribeTeamMembers = () => {
-  onSnapshot(
-    collection(db, 'teamMembers'),
+const renderAdminState = () => {
+  const showLoading = Boolean(firebaseInitError) || !bootstrapChecked || !authStateResolved || adminAccessCheckInFlight;
+  const showSetup = !showLoading && !bootstrapCompleted;
+  const showLogin = !showLoading && bootstrapCompleted && !auth.currentUser;
+  const showDashboard = !showLoading && bootstrapCompleted && Boolean(activeAdminProfile?.role === 'admin' && auth.currentUser);
+
+  toggleHidden(adminLoading, !showLoading);
+  toggleHidden(adminSetup, !showSetup);
+  toggleHidden(adminGate, !showLogin);
+  toggleHidden(adminConsole, !showDashboard);
+  toggleHidden(logoutButton, !showDashboard);
+  toggleHidden(adminSessionLabel, !showDashboard);
+
+  if (showDashboard && activeAdminProfile) {
+    adminSessionLabel.textContent = activeAdminProfile.name || activeAdminProfile.email || auth.currentUser?.email || 'Admin';
+  }
+
+  if (showLogin && pendingLoginMessage) {
+    setStatus(adminLoginStatus, pendingLoginMessage, true);
+    pendingLoginMessage = '';
+  }
+};
+
+const setFatalState = (message) => {
+  bootstrapChecked = false;
+  authStateResolved = false;
+  adminAccessCheckInFlight = false;
+  stopDashboardSubscriptions();
+  setStatus(adminLoadingStatus, message, true);
+  renderAdminState();
+};
+
+const refreshBootstrapState = async () => {
+  setStatus(adminLoadingStatus, 'Checking first-admin bootstrap state...');
+
+  const bootstrapSnapshot = await getDoc(doc(db, COLLECTIONS.system, SYSTEM_DOCS.bootstrap));
+  bootstrapChecked = true;
+  bootstrapCompleted = bootstrapSnapshot.exists() && bootstrapSnapshot.data().completed === true;
+
+  if (bootstrapCompleted) {
+    setStatus(adminLoadingStatus, 'Bootstrap completed. Checking admin session...');
+    return;
+  }
+
+  setStatus(adminLoadingStatus, 'Bootstrap not completed yet.');
+};
+
+const startDashboardSubscriptions = () => {
+  if (unsubscribeMembers || unsubscribeSubmissions) {
+    return;
+  }
+
+  unsubscribeMembers = onSnapshot(
+    collection(db, COLLECTIONS.teamMembers),
     (snapshot) => {
       members = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       renderMemberSelects();
@@ -195,12 +316,9 @@ const subscribeTeamMembers = () => {
       setStatus(memberFormStatus, `Unable to load team members: ${error.message}`, true);
     },
   );
-};
 
-const subscribeSubmissions = () => {
-  const submissionsQuery = query(collection(db, 'appointmentSubmissions'), orderBy('createdAt', 'desc'));
-  onSnapshot(
-    submissionsQuery,
+  unsubscribeSubmissions = onSnapshot(
+    query(collection(db, COLLECTIONS.appointmentSubmissions), orderBy('createdAt', 'desc')),
     (snapshot) => {
       submissions = snapshot.docs.map((docSnap) => ({ id: docSnap.id, data: docSnap.data() }));
       renderSubmissions();
@@ -211,26 +329,52 @@ const subscribeSubmissions = () => {
   );
 };
 
+const verifyAdminAccess = async (user) => {
+  adminAccessCheckInFlight = true;
+  renderAdminState();
+  setStatus(adminLoadingStatus, 'Checking admin access...');
+
+  try {
+    const adminSnapshot = await getDoc(doc(db, COLLECTIONS.admins, user.uid));
+    if (!adminSnapshot.exists() || adminSnapshot.data().role !== 'admin') {
+      pendingLoginMessage = 'You do not have admin access.';
+      activeAdminProfile = null;
+      stopDashboardSubscriptions();
+      await signOut(auth);
+      return;
+    }
+
+    activeAdminProfile = { id: adminSnapshot.id, ...adminSnapshot.data() };
+    startDashboardSubscriptions();
+  } catch (error) {
+    pendingLoginMessage = `Unable to verify admin access: ${error.message}`;
+    activeAdminProfile = null;
+    stopDashboardSubscriptions();
+    await signOut(auth);
+  } finally {
+    adminAccessCheckInFlight = false;
+    authStateResolved = true;
+    renderAdminState();
+  }
+};
+
 const handleMemberSave = async (event) => {
   event.preventDefault();
 
   const name = memberNameInput.value.trim();
-  const photoUrl = memberPhotoInput.value.trim() || DEFAULT_PHOTO;
+  const photoUrl = memberPhotoInput.value.trim();
   const bookedAppointments = parseNumber(memberBookedInput.value);
   const demos = parseNumber(memberDemosInput.value);
   const estimatedRevenue = parseNumber(memberRevenueInput.value);
   const active = memberActiveInput.checked;
 
   if (!name) {
-    setStatus(memberFormStatus, 'Team Member Name is required.', true);
+    setStatus(memberFormStatus, 'Team member name is required.', true);
     return;
   }
-  if (!photoUrl) {
-    setStatus(memberFormStatus, 'Photo / Avatar URL is required.', true);
-    return;
-  }
+
   if ([bookedAppointments, demos, estimatedRevenue].some((value) => Number.isNaN(value) || value < 0)) {
-    setStatus(memberFormStatus, 'Booked, demos, and revenue must be valid non-negative numbers.', true);
+    setStatus(memberFormStatus, 'Booked appointments, demos, and revenue must be valid non-negative numbers.', true);
     return;
   }
 
@@ -242,9 +386,15 @@ const handleMemberSave = async (event) => {
   }
 
   try {
-    const memberRef = doc(db, 'teamMembers', memberId);
+    setStatus(memberFormStatus, 'Saving team member...');
+
+    const memberRef = doc(db, COLLECTIONS.teamMembers, memberId);
     await runTransaction(db, async (transaction) => {
       const memberSnapshot = await transaction.get(memberRef);
+      if (!selectedId && memberSnapshot.exists()) {
+        throw new Error('A team member with this name already exists. Choose a different name or edit the existing member.');
+      }
+
       const payload = {
         name,
         photoUrl,
@@ -254,16 +404,21 @@ const handleMemberSave = async (event) => {
         active,
         updatedAt: serverTimestamp(),
       };
+
       if (!memberSnapshot.exists()) {
         payload.createdAt = serverTimestamp();
       }
+
       transaction.set(memberRef, payload, { merge: true });
     });
 
     setStatus(memberFormStatus, 'Team member saved.');
     if (!selectedId) {
       clearMemberForm();
+      return;
     }
+
+    renderMemberPhotoPreview({ name, photoUrl });
   } catch (error) {
     setStatus(memberFormStatus, `Failed to save team member: ${error.message}`, true);
   }
@@ -284,7 +439,7 @@ const handleSubmissionAction = async (event) => {
 
   try {
     if (action === 'toggle-reviewed') {
-      await updateDoc(doc(db, 'appointmentSubmissions', submissionId), {
+      await updateDoc(doc(db, COLLECTIONS.appointmentSubmissions, submissionId), {
         reviewed: Boolean(trigger.checked),
         updatedAt: serverTimestamp(),
       });
@@ -295,44 +450,134 @@ const handleSubmissionAction = async (event) => {
     if (action === 'delete-submission') {
       const { teamMemberId } = selectedSubmission.data;
       await runTransaction(db, async (transaction) => {
-        transaction.delete(doc(db, 'appointmentSubmissions', submissionId));
-        if (teamMemberId) {
-          const memberRef = doc(db, 'teamMembers', teamMemberId);
-          const memberSnapshot = await transaction.get(memberRef);
-          if (memberSnapshot.exists()) {
-            const bookedAppointments = Number(memberSnapshot.data().bookedAppointments || 0);
-            transaction.update(memberRef, {
-              bookedAppointments: Math.max(0, bookedAppointments - 1),
-              updatedAt: serverTimestamp(),
-            });
-          }
-        }
+        transaction.delete(doc(db, COLLECTIONS.appointmentSubmissions, submissionId));
+
+        if (!teamMemberId) return;
+
+        const memberRef = doc(db, COLLECTIONS.teamMembers, teamMemberId);
+        const memberSnapshot = await transaction.get(memberRef);
+        if (!memberSnapshot.exists()) return;
+
+        const bookedAppointments = Number(memberSnapshot.data().bookedAppointments || 0);
+        transaction.update(memberRef, {
+          bookedAppointments: Math.max(0, bookedAppointments - 1),
+          updatedAt: serverTimestamp(),
+        });
       });
-      setStatus(submissionStatus, 'Submission deleted and stats corrected.');
+
+      setStatus(submissionStatus, 'Submission deleted and booked appointments corrected.');
     }
   } catch (error) {
     setStatus(submissionStatus, `Submission update failed: ${error.message}`, true);
   }
 };
 
-const bindEvents = () => {
-  adminLoginForm.addEventListener('submit', (event) => {
-    event.preventDefault();
+const handleFirstAdminSetup = async (event) => {
+  event.preventDefault();
 
-    if (adminPasswordInput.value !== ACTIVE_ADMIN_PASSWORD) {
-      setStatus(adminLoginStatus, 'Incorrect password.', true);
-      return;
+  const name = setupNameInput.value.trim();
+  const email = setupEmailInput.value.trim();
+  const password = setupPasswordInput.value;
+  const confirmPassword = setupPasswordConfirmInput.value;
+
+  if (!name || !email || !password || !confirmPassword) {
+    setStatus(adminSetupStatus, 'Name, email, password, and confirmation are required.', true);
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    setStatus(adminSetupStatus, 'Passwords do not match.', true);
+    return;
+  }
+
+  let createdUser = null;
+
+  try {
+    setStatus(adminSetupStatus, 'Creating first admin...');
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    createdUser = userCredential.user;
+
+    const adminRef = doc(db, COLLECTIONS.admins, createdUser.uid);
+    const bootstrapRef = doc(db, COLLECTIONS.system, SYSTEM_DOCS.bootstrap);
+    const batch = writeBatch(db);
+    batch.set(adminRef, {
+      email,
+      name,
+      role: 'admin',
+      createdAt: serverTimestamp(),
+      bootstrapAdmin: true,
+    });
+    batch.set(bootstrapRef, {
+      completed: true,
+      completedBy: createdUser.uid,
+      completedAt: serverTimestamp(),
+      adminEmail: email,
+    });
+    await batch.commit();
+
+    bootstrapCompleted = true;
+    bootstrapChecked = true;
+    activeAdminProfile = {
+      id: createdUser.uid,
+      email,
+      name,
+      role: 'admin',
+      bootstrapAdmin: true,
+    };
+    authStateResolved = true;
+    setStatus(adminSetupStatus, 'First admin created. Loading dashboard...');
+    startDashboardSubscriptions();
+    renderAdminState();
+  } catch (error) {
+    if (createdUser) {
+      try {
+        await deleteUser(createdUser);
+      } catch (rollbackError) {
+        console.warn('Unable to roll back partially created user:', rollbackError);
+      }
     }
+    setStatus(adminSetupStatus, `Unable to create the first admin: ${error.message}`, true);
+  }
+};
 
-    sessionStorage.setItem(ACCESS_KEY, 'true');
-    adminGate.classList.add('hidden');
-    adminConsole.classList.remove('hidden');
-    setStatus(adminLoginStatus, 'Access granted.');
-  });
+const handleAdminLogin = async (event) => {
+  event.preventDefault();
+  const email = adminEmailInput.value.trim();
+  const password = adminPasswordInput.value;
+
+  if (!email || !password) {
+    setStatus(adminLoginStatus, 'Email and password are required.', true);
+    return;
+  }
+
+  try {
+    setStatus(adminLoginStatus, 'Signing in...');
+    await signInWithEmailAndPassword(auth, email, password);
+    setStatus(adminLoginStatus, '');
+  } catch (error) {
+    setStatus(adminLoginStatus, `Unable to sign in: ${error.message}`, true);
+  }
+};
+
+const handleLogout = async () => {
+  try {
+    setStatus(adminLoadingStatus, 'Signing out...');
+    await signOut(auth);
+  } catch (error) {
+    setStatus(adminLoginStatus, `Unable to sign out: ${error.message}`, true);
+  }
+};
+
+const bindEvents = () => {
+  adminSetupForm.addEventListener('submit', handleFirstAdminSetup);
+  adminLoginForm.addEventListener('submit', handleAdminLogin);
+  logoutButton.addEventListener('click', handleLogout);
 
   memberEditSelect.addEventListener('change', () => populateMemberForm(memberEditSelect.value));
   memberForm.addEventListener('submit', handleMemberSave);
   clearMemberButton.addEventListener('click', clearMemberForm);
+  memberNameInput.addEventListener('input', () => renderMemberPhotoPreview());
+  memberPhotoInput.addEventListener('input', () => renderMemberPhotoPreview());
 
   filterDateInput.addEventListener('change', renderSubmissions);
   filterMemberSelect.addEventListener('change', renderSubmissions);
@@ -346,31 +591,45 @@ const bindEvents = () => {
   submissionsTableBody.addEventListener('change', handleSubmissionAction);
 };
 
-const showAdminConsoleIfAuthorized = () => {
-  const hasAccess = sessionStorage.getItem(ACCESS_KEY) === 'true';
-  if (hasAccess) {
-    adminGate.classList.add('hidden');
-    adminConsole.classList.remove('hidden');
-  }
-};
-
-const disableDashboard = (message) => {
-  adminLoginForm.querySelector('button[type="submit"]').disabled = true;
-  adminPasswordInput.disabled = true;
-  setStatus(adminLoginStatus, message, true);
-};
-
-const init = () => {
+const init = async () => {
   bindEvents();
-  showAdminConsoleIfAuthorized();
+  renderMemberPhotoPreview({ name: '' });
 
-  if (!db || firebaseInitError) {
-    disableDashboard(firebaseInitError?.message || 'Firebase is not configured.');
+  if (!db || !auth || firebaseInitError) {
+    setFatalState(firebaseInitError?.message || 'Firebase is not configured.');
     return;
   }
 
-  subscribeTeamMembers();
-  subscribeSubmissions();
+  try {
+    await refreshBootstrapState();
+  } catch (error) {
+    setFatalState(`Unable to check bootstrap state: ${error.message}`);
+    return;
+  }
+
+  onAuthStateChanged(auth, async (user) => {
+    authStateResolved = false;
+    activeAdminProfile = null;
+    stopDashboardSubscriptions();
+    renderAdminState();
+
+    if (!user) {
+      authStateResolved = true;
+      renderAdminState();
+      return;
+    }
+
+    if (!bootstrapCompleted) {
+      authStateResolved = true;
+      renderAdminState();
+      return;
+    }
+
+    await verifyAdminAccess(user);
+  });
+
+  authStateResolved = false;
+  renderAdminState();
 };
 
 init();

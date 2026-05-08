@@ -1,4 +1,5 @@
 import {
+  COLLECTIONS,
   collection,
   db,
   doc,
@@ -8,6 +9,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  where,
 } from './firebase.js';
 
 const memberSearchInput = document.getElementById('member-search');
@@ -26,10 +28,6 @@ const submissionModalBackdrop = document.getElementById('submission-modal-backdr
 const openSubmissionModalButton = document.getElementById('open-submission-modal');
 const closeSubmissionModalButton = document.getElementById('close-submission-modal');
 const cancelSubmissionModalButton = document.getElementById('cancel-submission-modal');
-
-const DEFAULT_PHOTO =
-  (window.VLADDER_CONFIG && window.VLADDER_CONFIG.defaultPhotoUrl) ||
-  'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=240&q=80';
 
 let allMembers = [];
 let displayMembers = [];
@@ -70,6 +68,17 @@ const escapeHtml = (value) =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+
+const getInitials = (name) => {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return 'VL';
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'VL';
+};
 
 const formatSortMetric = (member, mode) => {
   if (mode === 'estimatedRevenue') {
@@ -195,6 +204,14 @@ const bindSubmissionModal = () => {
   });
 };
 
+const createFallbackPhotoElement = (member) => {
+  const fallback = document.createElement('div');
+  fallback.className = 'member-photo member-photo-fallback';
+  fallback.textContent = getInitials(member.name);
+  fallback.setAttribute('aria-label', `${member.name || 'Team member'} photo fallback`);
+  return fallback;
+};
+
 const renderLeaderboard = () => {
   const previousCards = Array.from(leaderboardEl.children).reduce((map, card) => {
     map.set(card.dataset.memberId, card.getBoundingClientRect());
@@ -229,18 +246,21 @@ const renderLeaderboard = () => {
     const highlightLabel = escapeHtml(sortLabels[sortMode] || 'Score');
     const bookedAppointments = Number(member.bookedAppointments || 0).toLocaleString('en-US');
     const demos = Number(member.demos || 0).toLocaleString('en-US');
+    const safeName = escapeHtml(member.name || 'Unknown');
+    const safeInitials = escapeHtml(getInitials(member.name));
+    const photoMarkup = member.photoUrl
+      ? `<img class="member-photo" src="${escapeHtml(member.photoUrl)}" alt="${safeName}" loading="lazy" />`
+      : `<div class="member-photo member-photo-fallback" aria-hidden="true">${safeInitials}</div>`;
 
     const card = document.createElement('article');
     card.dataset.memberId = member.id;
     card.className = `member-card rank-${Math.min(rank, 4)} ${recentlyUpdated.has(member.id) ? 'recent-update' : ''}`;
-    const safeName = escapeHtml(member.name || 'Unknown');
-    const safePhoto = escapeHtml(member.photoUrl || DEFAULT_PHOTO);
     card.innerHTML = `
       <div class="rank-pill">
         <span class="rank-number">#${rank}</span>
         <span class="rank-label">Rank</span>
       </div>
-      <img class="member-photo" src="${safePhoto}" alt="${safeName}" loading="lazy" />
+      ${photoMarkup}
       <div class="member-main">
         <div class="member-name">${safeName}</div>
         ${badgeMarkup}
@@ -275,6 +295,17 @@ const renderLeaderboard = () => {
 
     leaderboardEl.append(card);
 
+    const photoElement = card.querySelector('img.member-photo');
+    if (photoElement) {
+      photoElement.addEventListener(
+        'error',
+        () => {
+          photoElement.replaceWith(createFallbackPhotoElement(member));
+        },
+        { once: true },
+      );
+    }
+
     const oldRect = previousCards.get(member.id);
     if (oldRect) {
       const newRect = card.getBoundingClientRect();
@@ -305,14 +336,14 @@ const bindTabs = () => {
         tab.classList.toggle('is-active', isActive);
         tab.setAttribute('aria-selected', String(isActive));
       });
-      displayMembers = sortMembers(allMembers.filter((member) => member.active !== false), sortMode);
+      displayMembers = sortMembers(allMembers, sortMode);
       renderLeaderboard();
     });
   });
 };
 
 const subscribeTeamMembers = () => {
-  const membersQuery = query(collection(db, 'teamMembers'));
+  const membersQuery = query(collection(db, COLLECTIONS.teamMembers), where('active', '==', true));
   onSnapshot(
     membersQuery,
     (snapshot) => {
@@ -332,7 +363,7 @@ const subscribeTeamMembers = () => {
       });
 
       allMembers = incoming;
-      displayMembers = sortMembers(allMembers.filter((member) => member.active !== false), sortMode);
+      displayMembers = sortMembers(allMembers, sortMode);
       updateMemberAutocomplete();
       renderLeaderboard();
     },
@@ -376,13 +407,13 @@ const bindSubmissionForm = () => {
 
     try {
       await runTransaction(db, async (transaction) => {
-        const memberRef = doc(db, 'teamMembers', member.id);
+        const memberRef = doc(db, COLLECTIONS.teamMembers, member.id);
         transaction.update(memberRef, {
           bookedAppointments: increment(1),
           updatedAt: serverTimestamp(),
         });
 
-        const submissionRef = doc(collection(db, 'appointmentSubmissions'));
+        const submissionRef = doc(collection(db, COLLECTIONS.appointmentSubmissions));
         transaction.set(submissionRef, {
           teamMemberId: member.id,
           teamMemberName: member.name,

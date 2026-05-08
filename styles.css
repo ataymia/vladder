@@ -210,6 +210,24 @@ button.small {
   box-shadow: 0 0 22px rgba(79, 140, 255, 0.22);
 }
 
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.session-pill {
+  margin: 0;
+  padding: 0.56rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 164, 235, 0.25);
+  background: rgba(9, 18, 35, 0.74);
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .status {
   min-height: 1.05rem;
   font-size: 0.84rem;
@@ -363,6 +381,17 @@ button.small {
   border-radius: 1rem;
   border: 1px solid rgba(141, 174, 250, 0.65);
   object-fit: cover;
+}
+
+.member-photo-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(94, 139, 255, 0.35), transparent 45%),
+    linear-gradient(145deg, rgba(15, 27, 48, 0.98), rgba(7, 14, 24, 0.9));
 }
 
 .member-main {
@@ -557,6 +586,36 @@ td {
   gap: 0.34rem;
 }
 
+.photo-preview {
+  min-height: 104px;
+  border-radius: 1rem;
+  border: 1px dashed rgba(123, 166, 255, 0.32);
+  background: rgba(8, 14, 27, 0.56);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.photo-preview-image {
+  width: 100%;
+  height: 100%;
+  min-height: 104px;
+  object-fit: cover;
+}
+
+.photo-preview-fallback {
+  width: 100%;
+  min-height: 104px;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(88, 135, 255, 0.38), transparent 48%),
+    linear-gradient(145deg, rgba(17, 29, 53, 0.96), rgba(9, 16, 28, 0.88));
+}
+
 .hidden {
   display: none;
 }
@@ -565,6 +624,11 @@ td {
   .content-grid,
   .admin-console {
     grid-template-columns: 1fr;
+  }
+
+  .hero-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .member-card {

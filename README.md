@@ -1,51 +1,21 @@
-# The VLadder (Vault Roofing)
+# VLadder
 
-The VLadder is a static HTML/CSS/JS leaderboard app for Vault Roofing with real-time Firebase Firestore updates.
+VLadder is a static HTML, CSS, and JavaScript leaderboard app with a public live scoreboard, modal appointment logging, and a Firebase-protected admin dashboard.
 
-## Files
+## Key Files
 
-- `index.html` — team-facing live leaderboard and quick submission form
-- `admin.html` — password-gated management dashboard
-- `styles.css` — dark navy/black polished UI theme
-- `firebase.js` — Firebase initialization and shared Firestore exports
-- `app.js` — public leaderboard logic (sorting tabs, realtime cards, animated reordering)
-- `admin.js` — admin member/submission management logic
-- `config.example.js` — Firebase config template
-- `config.js` — local Firebase config file
+- `index.html` — public live leaderboard shell
+- `admin.html` — admin bootstrap, login, and dashboard shell
+- `styles.css` — shared UI styles for public and admin screens
+- `app.js` — public leaderboard and appointment submission logic
+- `admin.js` — Firebase-authenticated admin dashboard logic
+- `firebase.js` — shared Firebase initialization and helpers
+- `firebase-config.js` — generated browser Firebase config module
+- `scripts/generate-config.mjs` — Cloudflare Pages build-time config generator
+- `firestore.rules` — Firestore security rules
+- `firebase.json` — Firebase deploy config for rules and indexes
+- `FIREBASE_SETUP.md` — end-to-end Cloudflare Pages and Firebase setup guide
 
 ## Setup
 
-1. Create a Firebase project and enable Firestore.
-2. Copy `config.example.js` to `config.js`.
-3. Fill in Firebase values in `config.js`.
-4. Set `ADMIN_PASSWORD` in `admin.js` (or set `adminPassword` in `config.js`).
-5. Open `index.html`.
-
-## Firestore Collections
-
-### `teamMembers`
-
-- `name` (string)
-- `photoUrl` (string)
-- `bookedAppointments` (number)
-- `demos` (number)
-- `estimatedRevenue` (number)
-- `active` (boolean)
-- `createdAt`, `updatedAt`
-
-### `appointmentSubmissions`
-
-- `teamMemberId` (string)
-- `teamMemberName` (string)
-- `appointmentDate` (YYYY-MM-DD string)
-- `note` (string)
-- `reviewed` (boolean)
-- `createdAt`
-
-## Notes
-
-- Public page only allows submissions for existing team members.
-- Booked appointments are incremented atomically with Firestore `increment(1)` in a transaction.
-- Leaderboard supports ranking tabs: Booked Appointments, Demos, and Estimated Revenue.
-- Admin can add/edit/deactivate team members, filter/mark/delete submissions, and manually correct stats.
-- `admin.html` password gating is client-side only and not secure for public internet exposure. Use real server-side authentication for production security.
+See `FIREBASE_SETUP.md` for the full Firebase, Cloudflare Pages, Auth, Firestore, bootstrap-admin, and rules deployment workflow.

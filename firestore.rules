@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function bootstrapCompleted() {
+      return exists(/databases/$(database)/documents/system/bootstrap)
+        && get(/databases/$(database)/documents/system/bootstrap).data.completed == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function validRevenue(value) {
+      return (value is int || value is float) && value >= 0;
+    }
+
+    function validTeamMemberWriteData() {
+      return request.resource.data.keys().hasOnly([
+          'name',
+          'photoUrl',
+          'photoPath',
+          'bookedAppointments',
+          'demos',
+          'estimatedRevenue',
+          'active',
+          'createdAt',
+          'updatedAt',
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.photoUrl is string
+        && (!request.resource.data.keys().hasAny(['photoPath']) || request.resource.data.photoPath is string)
+        && request.resource.data.bookedAppointments is int
+        && request.resource.data.bookedAppointments >= 0
+        && request.resource.data.demos is int
+        && request.resource.data.demos >= 0
+        && validRevenue(request.resource.data.estimatedRevenue)
+        && request.resource.data.active is bool
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validFirstAdminCreate(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && !bootstrapCompleted()
+        && request.resource.data.keys().hasOnly([
+          'email',
+          'name',
+          'role',
+          'createdAt',
+          'bootstrapAdmin',
+        ])
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.role == 'admin'
+        && request.resource.data.bootstrapAdmin == true
+        && request.resource.data.createdAt is timestamp
+        && getAfter(/databases/$(database)/documents/system/bootstrap).data.completed == true
+        && getAfter(/databases/$(database)/documents/system/bootstrap).data.completedBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/system/bootstrap).data.adminEmail == request.resource.data.email;
+    }
+
+    function validBootstrapCreate() {
+      return isSignedIn()
+        && !bootstrapCompleted()
+        && request.resource.data.keys().hasOnly([
+          'completed',
+          'completedBy',
+          'completedAt',
+          'adminEmail',
+        ])
+        && request.resource.data.completed == true
+        && request.resource.data.completedBy == request.auth.uid
+        && request.resource.data.completedAt is timestamp
+        && request.resource.data.adminEmail is string
+        && getAfter(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin'
+        && getAfter(/databases/$(database)/documents/admins/$(request.auth.uid)).data.bootstrapAdmin == true
+        && getAfter(/databases/$(database)/documents/admins/$(request.auth.uid)).data.email == request.resource.data.adminEmail;
+    }
+
+    function validSubmissionCreate() {
+      return request.resource.data.keys().hasOnly([
+          'teamMemberId',
+          'teamMemberName',
+          'appointmentDate',
+          'note',
+          'reviewed',
+          'createdAt',
+        ])
+        && request.resource.data.teamMemberId is string
+        && request.resource.data.teamMemberId.size() > 0
+        && request.resource.data.teamMemberName is string
+        && request.resource.data.teamMemberName.size() > 0
+        && request.resource.data.appointmentDate is string
+        && request.resource.data.appointmentDate.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 300
+        && request.resource.data.reviewed == false
+        && request.resource.data.createdAt is timestamp
+        && exists(/databases/$(database)/documents/teamMembers/$(request.resource.data.teamMemberId))
+        && get(/databases/$(database)/documents/teamMembers/$(request.resource.data.teamMemberId)).data.active == true
+        && get(/databases/$(database)/documents/teamMembers/$(request.resource.data.teamMemberId)).data.name == request.resource.data.teamMemberName;
+    }
+
+    function validPublicBookedAppointmentIncrement() {
+      return resource.data.active == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'bookedAppointments',
+          'updatedAt',
+        ])
+        && request.resource.data.bookedAppointments is int
+        && request.resource.data.bookedAppointments == resource.data.bookedAppointments + 1
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    match /teamMembers/{memberId} {
+      allow get, list: if isAdmin() || resource.data.active == true;
+      allow create: if isAdmin() && validTeamMemberWriteData();
+      allow update: if (isAdmin() && validTeamMemberWriteData()) || validPublicBookedAppointmentIncrement();
+      allow delete: if isAdmin();
+    }
+
+    match /appointmentSubmissions/{submissionId} {
+      allow create: if validSubmissionCreate();
+      allow get, list: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /admins/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if validFirstAdminCreate(userId);
+      allow update, delete: if false;
+    }
+
+    match /system/bootstrap {
+      allow get: if true;
+      allow list: if false;
+      allow create: if validBootstrapCreate();
+      allow update, delete: if false;
+    }
+
+    match /system/{documentId} {
+      allow read, write: if false;
+    }
+  }
+}
