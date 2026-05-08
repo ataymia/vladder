@@ -13,7 +13,7 @@ import {
 } from './firebase.js';
 
 // Internal static-site gate only. Must be changed before deployment and does not replace server-side authentication.
-const ADMIN_PASSWORD = 'CHANGE_ME';
+const ADMIN_PASSWORD = 'SET_A_STRONG_PASSWORD';
 const ACTIVE_ADMIN_PASSWORD = (window.VLADDER_CONFIG && window.VLADDER_CONFIG.adminPassword) || ADMIN_PASSWORD;
 const ACCESS_KEY = 'vladder_admin_access';
 const DEFAULT_PHOTO =
