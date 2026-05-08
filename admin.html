@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The VLadder Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./config.js"></script>
+  </head>
+  <body>
+    <div class="page-shell admin-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Operations</p>
+          <h1>The VLadder Admin</h1>
+          <p class="subtext">Manage members, metrics, and appointment submissions.</p>
+        </div>
+        <a class="admin-link" href="./index.html">Team View</a>
+      </header>
+
+      <main class="admin-layout">
+        <section id="admin-gate" class="panel">
+          <h2>Admin Access</h2>
+          <form id="admin-login-form" class="stack">
+            <label>
+              Password
+              <input id="admin-password" type="password" required autocomplete="current-password" />
+            </label>
+            <button type="submit">Unlock Admin</button>
+            <p id="admin-login-status" class="status"></p>
+          </form>
+        </section>
+
+        <section id="admin-console" class="admin-console hidden">
+          <section class="panel">
+            <h2>Add / Edit Team Member</h2>
+            <form id="member-form" class="stack">
+              <label>
+                Edit Existing Member
+                <select id="member-edit-select">
+                  <option value="">Create new member</option>
+                </select>
+              </label>
+              <label>
+                Name
+                <input id="member-name" type="text" required />
+              </label>
+              <label>
+                Photo URL
+                <input id="member-photo" type="url" placeholder="https://..." required />
+              </label>
+              <div class="metric-row">
+                <label>
+                  Appointments
+                  <input id="member-appointments" type="number" min="0" step="1" value="0" required />
+                </label>
+                <label>
+                  Demos
+                  <input id="member-demos" type="number" min="0" step="1" value="0" required />
+                </label>
+                <label>
+                  Revenue
+                  <input id="member-revenue" type="number" min="0" step="0.01" value="0" required />
+                </label>
+              </div>
+              <label>
+                Bonus Tier
+                <select id="member-bonus" required>
+                  <option>Starter</option>
+                  <option>Bronze</option>
+                  <option>Silver</option>
+                  <option>Gold</option>
+                  <option>Platinum</option>
+                </select>
+              </label>
+              <div class="button-row">
+                <button type="submit">Save Member</button>
+                <button type="button" id="clear-member-form" class="secondary">Clear</button>
+              </div>
+              <p id="member-form-status" class="status"></p>
+            </form>
+          </section>
+
+          <section class="panel">
+            <h2>Submission Review</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Date</th>
+                    <th>Booked</th>
+                    <th>Submitted</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="submission-table-body"></tbody>
+              </table>
+            </div>
+            <p id="submission-admin-status" class="status"></p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./admin.js"></script>
+  </body>
+</html>
