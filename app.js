@@ -4,7 +4,6 @@ import {
   db,
   doc,
   firebaseInitError,
-  increment,
   onSnapshot,
   query,
   runTransaction,
@@ -42,6 +41,21 @@ const sortLabels = {
 
 let submissionSuccessTimeoutId = null;
 let modalReturnFocusTarget = null;
+
+const describeFirebaseError = (error, fallback = 'Something went wrong.') => {
+  const code = typeof error?.code === 'string' ? error.code.replace(/^(auth|firestore)\//, '') : '';
+
+  switch (code) {
+    case 'permission-denied':
+      return 'You do not have permission to do that. Check Firebase access and Firestore rules.';
+    case 'failed-precondition':
+      return 'Firebase is missing required setup. Confirm Firestore and Authentication are enabled.';
+    case 'unavailable':
+      return 'Firebase is temporarily unavailable. Try again in a moment.';
+    default:
+      return error?.message || fallback;
+  }
+};
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-US', {
@@ -262,8 +276,16 @@ const renderLeaderboard = () => {
       </div>
       ${photoMarkup}
       <div class="member-main">
-        <div class="member-name">${safeName}</div>
-        ${badgeMarkup}
+        <div class="member-header">
+          <div class="member-heading">
+            <div class="member-name">${safeName}</div>
+            ${badgeMarkup}
+          </div>
+          <div class="metric-highlight" aria-label="Current ${highlightLabel}">
+            <strong>${highlightValue}</strong>
+            <span>${highlightLabel}</span>
+          </div>
+        </div>
         <div class="metrics">
           <div class="stat-chip">
             <span>Booked Appointments</span>
@@ -281,15 +303,11 @@ const renderLeaderboard = () => {
             <span>Demo Bonus Estimate</span>
             <strong>${formatCurrency(bonusEstimate)}</strong>
           </div>
-          <div class="stat-chip stat-chip-wide">
+          <div class="stat-chip stat-chip-tier">
             <span>Current Tier</span>
             <strong>${formatTier(member.demos)}</strong>
           </div>
         </div>
-      </div>
-      <div class="metric-highlight">
-        ${highlightValue}
-        <span>${highlightLabel}</span>
       </div>
     `;
 
@@ -368,7 +386,7 @@ const subscribeTeamMembers = () => {
       renderLeaderboard();
     },
     (error) => {
-      setStatus(leaderboardStatus, `Live update failed: ${error.message}`, true);
+      setStatus(leaderboardStatus, `Live update failed: ${describeFirebaseError(error, 'Unable to load leaderboard.')}`, true);
     },
   );
 };
@@ -408,8 +426,19 @@ const bindSubmissionForm = () => {
     try {
       await runTransaction(db, async (transaction) => {
         const memberRef = doc(db, COLLECTIONS.teamMembers, member.id);
+        const memberSnapshot = await transaction.get(memberRef);
+
+        if (!memberSnapshot.exists()) {
+          throw new Error('The selected team member is no longer available. Refresh the leaderboard and try again.');
+        }
+
+        const memberData = memberSnapshot.data();
+        if (memberData.active === false) {
+          throw new Error('The selected team member is inactive and cannot receive new booked appointments.');
+        }
+
         transaction.update(memberRef, {
-          bookedAppointments: increment(1),
+          bookedAppointments: Number(memberData.bookedAppointments || 0) + 1,
           updatedAt: serverTimestamp(),
         });
 
@@ -425,6 +454,7 @@ const bindSubmissionForm = () => {
       });
 
       setStatus(submissionStatus, 'Appointment submitted successfully. Leaderboard updated.');
+      memberSearchInput.value = '';
       noteInput.value = '';
       refreshNoteCount();
       dateInput.valueAsDate = new Date();
@@ -432,7 +462,7 @@ const bindSubmissionForm = () => {
         closeSubmissionModal({ clearStatus: true });
       }, 800);
     } catch (error) {
-      setStatus(submissionStatus, `Unable to submit appointment: ${error.message}`, true);
+      setStatus(submissionStatus, `Unable to submit appointment: ${describeFirebaseError(error, 'Unable to submit appointment.')}`, true);
     }
   });
 };

@@ -45,10 +45,10 @@ body.modal-open {
 .public-shell {
   width: min(1680px, 97vw);
   min-height: 100vh;
-  padding: 0.9rem 0 1.4rem;
+  padding: 0.7rem 0 1rem;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.9rem;
+  gap: 0.7rem;
 }
 
 .hero {
@@ -126,7 +126,7 @@ h1 {
   min-height: calc(100vh - 7rem);
   display: flex;
   flex-direction: column;
-  padding: 1.2rem;
+  padding: 1rem;
 }
 
 .stack {
@@ -257,7 +257,7 @@ button.small {
 
 .leaderboard-head-compact {
   align-items: end;
-  margin-bottom: 1rem;
+  margin-bottom: 0.8rem;
 }
 
 .leaderboard-head p {
@@ -288,19 +288,19 @@ button.small {
 
 .leaderboard {
   display: grid;
-  gap: 0.95rem;
+  gap: 0.65rem;
 }
 
 .member-card {
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 92px 82px minmax(0, 1.65fr) minmax(170px, 0.8fr);
-  gap: 1.1rem;
+  grid-template-columns: 74px 60px minmax(0, 1fr);
+  gap: 0.8rem;
   align-items: center;
-  border-radius: 1.2rem;
+  border-radius: 1rem;
   border: 1px solid rgba(120, 155, 232, 0.25);
-  padding: 1rem 1.05rem;
+  padding: 0.72rem 0.8rem;
   background: linear-gradient(130deg, rgba(4, 8, 17, 0.92), rgba(14, 30, 60, 0.92));
 }
 
@@ -340,8 +340,8 @@ button.small {
 }
 
 .rank-pill {
-  width: 92px;
-  min-height: 92px;
+  width: 74px;
+  min-height: 74px;
   border-radius: 1rem;
   display: flex;
   flex-direction: column;
@@ -353,13 +353,13 @@ button.small {
 }
 
 .rank-number {
-  font-size: 1.85rem;
+  font-size: 1.45rem;
   line-height: 1;
 }
 
 .rank-label {
-  margin-top: 0.35rem;
-  font-size: 0.7rem;
+  margin-top: 0.22rem;
+  font-size: 0.64rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
@@ -376,9 +376,9 @@ button.small {
 }
 
 .member-photo {
-  width: 82px;
-  height: 82px;
-  border-radius: 1rem;
+  width: 60px;
+  height: 60px;
+  border-radius: 0.85rem;
   border: 1px solid rgba(141, 174, 250, 0.65);
   object-fit: cover;
 }
@@ -386,7 +386,7 @@ button.small {
 .member-photo-fallback {
   display: grid;
   place-items: center;
-  font-size: 1.3rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text);
   background:
@@ -396,18 +396,32 @@ button.small {
 
 .member-main {
   min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.member-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.member-heading {
+  min-width: 0;
 }
 
 .member-name {
   font-weight: 700;
-  font-size: 1.22rem;
+  font-size: 1rem;
+  line-height: 1.15;
 }
 
 .badge-row {
-  margin-top: 0.2rem;
+  margin-top: 0.28rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: 0.25rem;
 }
 
 .badge {
@@ -415,63 +429,67 @@ button.small {
   background: rgba(46, 74, 129, 0.4);
   color: #dce8ff;
   border-radius: 999px;
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  padding: 0.14rem 0.38rem;
 }
 
 .metrics {
-  margin-top: 0.75rem;
   display: grid;
-  gap: 0.55rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .stat-chip {
   display: grid;
-  gap: 0.18rem;
-  padding: 0.68rem 0.8rem;
-  border-radius: 0.95rem;
+  gap: 0.14rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.75rem;
   border: 1px solid rgba(119, 154, 223, 0.2);
   background: rgba(9, 15, 30, 0.58);
+  min-width: 0;
 }
 
 .stat-chip span {
-  font-size: 0.7rem;
+  font-size: 0.61rem;
   color: var(--muted);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .stat-chip strong {
-  font-size: 1.03rem;
+  font-size: 0.9rem;
+  line-height: 1.15;
   color: var(--text);
+  word-break: break-word;
 }
 
-.stat-chip-wide {
-  grid-column: 1 / -1;
+.stat-chip-tier strong {
+  font-size: 0.8rem;
 }
 
 .metric-highlight {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0.95rem 1rem;
-  border-radius: 1rem;
+  display: grid;
+  gap: 0.08rem;
+  padding: 0.42rem 0.6rem;
+  border-radius: 0.8rem;
   border: 1px solid rgba(118, 151, 221, 0.24);
   background: rgba(7, 13, 24, 0.62);
   text-align: right;
-  font-size: 1.45rem;
-  font-weight: 700;
+}
+
+.metric-highlight strong {
+  font-size: 0.98rem;
+  line-height: 1.1;
+  color: var(--text);
 }
 
 .metric-highlight span {
   display: block;
-  margin-top: 0.28rem;
-  font-size: 0.72rem;
+  font-size: 0.58rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 .floating-action-button {
@@ -526,21 +544,29 @@ button.small {
 .button-row,
 .filters {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .metric-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: start;
 }
 
 .button-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .filters {
   margin-top: 0.7rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   align-items: end;
+}
+
+.metric-row > label,
+.button-row > button,
+.filters > label,
+.admin-console > .panel {
+  min-width: 0;
 }
 
 .switch-row {
@@ -632,25 +658,19 @@ td {
   }
 
   .member-card {
-    grid-template-columns: 82px 68px minmax(0, 1fr);
+    grid-template-columns: 68px 56px minmax(0, 1fr);
   }
 
   .metric-highlight {
-    grid-column: 1 / -1;
     text-align: left;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 1.15rem;
   }
 
-  .metric-row,
   .filters {
     grid-template-columns: 1fr;
   }
 
   .metrics {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -671,34 +691,32 @@ td {
   }
 
   .member-card {
-    grid-template-columns: 68px minmax(0, 1fr);
-    gap: 0.8rem;
+    grid-template-columns: 56px 52px minmax(0, 1fr);
+    gap: 0.55rem;
   }
 
   .rank-pill {
-    width: 68px;
-    min-height: 68px;
+    width: 56px;
+    min-height: 56px;
+    border-radius: 0.85rem;
   }
 
   .rank-number {
-    font-size: 1.35rem;
+    font-size: 1.1rem;
   }
 
   .member-photo {
-    width: 68px;
-    height: 68px;
+    width: 52px;
+    height: 52px;
   }
 
-  .member-main {
-    grid-column: 2;
+  .member-header {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
 
   .metrics {
     grid-template-columns: 1fr;
-  }
-
-  .stat-chip-wide {
-    grid-column: auto;
   }
 
   .floating-action-button {

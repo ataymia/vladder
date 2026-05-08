@@ -68,6 +68,28 @@ let pendingLoginMessage = '';
 let unsubscribeMembers = null;
 let unsubscribeSubmissions = null;
 
+const describeFirebaseError = (error, fallback = 'Something went wrong.') => {
+  const code = typeof error?.code === 'string' ? error.code.replace(/^(auth|firestore)\//, '') : '';
+
+  switch (code) {
+    case 'permission-denied':
+      return 'You do not have permission to do that. Check admin access and Firestore rules.';
+    case 'failed-precondition':
+      return 'Firebase is missing required setup. Confirm Firestore and Authentication are enabled.';
+    case 'unavailable':
+      return 'Firebase is temporarily unavailable. Try again in a moment.';
+    case 'wrong-password':
+    case 'invalid-credential':
+      return 'The email or password is incorrect.';
+    case 'user-not-found':
+      return 'No admin account was found for that email.';
+    case 'email-already-in-use':
+      return 'That email is already being used by another account.';
+    default:
+      return error?.message || fallback;
+  }
+};
+
 const setStatus = (target, message, isError = false) => {
   target.textContent = message;
   target.className = `status ${message ? (isError ? 'error' : 'success') : ''}`.trim();
@@ -313,7 +335,7 @@ const startDashboardSubscriptions = () => {
       renderSubmissions();
     },
     (error) => {
-      setStatus(memberFormStatus, `Unable to load team members: ${error.message}`, true);
+      setStatus(memberFormStatus, `Unable to load team members: ${describeFirebaseError(error, 'Unable to load team members.')}`, true);
     },
   );
 
@@ -324,7 +346,7 @@ const startDashboardSubscriptions = () => {
       renderSubmissions();
     },
     (error) => {
-      setStatus(submissionStatus, `Unable to load submissions: ${error.message}`, true);
+      setStatus(submissionStatus, `Unable to load submissions: ${describeFirebaseError(error, 'Unable to load submissions.')}`, true);
     },
   );
 };
@@ -347,7 +369,7 @@ const verifyAdminAccess = async (user) => {
     activeAdminProfile = { id: adminSnapshot.id, ...adminSnapshot.data() };
     startDashboardSubscriptions();
   } catch (error) {
-    pendingLoginMessage = `Unable to verify admin access: ${error.message}`;
+    pendingLoginMessage = `Unable to verify admin access: ${describeFirebaseError(error, 'Unable to verify admin access.')}`;
     activeAdminProfile = null;
     stopDashboardSubscriptions();
     await signOut(auth);
@@ -420,7 +442,7 @@ const handleMemberSave = async (event) => {
 
     renderMemberPhotoPreview({ name, photoUrl });
   } catch (error) {
-    setStatus(memberFormStatus, `Failed to save team member: ${error.message}`, true);
+    setStatus(memberFormStatus, `Failed to save team member: ${describeFirebaseError(error, 'Unable to save team member.')}`, true);
   }
 };
 
@@ -468,7 +490,7 @@ const handleSubmissionAction = async (event) => {
       setStatus(submissionStatus, 'Submission deleted and booked appointments corrected.');
     }
   } catch (error) {
-    setStatus(submissionStatus, `Submission update failed: ${error.message}`, true);
+    setStatus(submissionStatus, `Submission update failed: ${describeFirebaseError(error, 'Unable to update submission.')}`, true);
   }
 };
 
@@ -536,7 +558,7 @@ const handleFirstAdminSetup = async (event) => {
         console.warn('Unable to roll back partially created user:', rollbackError);
       }
     }
-    setStatus(adminSetupStatus, `Unable to create the first admin: ${error.message}`, true);
+    setStatus(adminSetupStatus, `Unable to create the first admin: ${describeFirebaseError(error, 'Unable to create the first admin.')}`, true);
   }
 };
 
@@ -555,7 +577,7 @@ const handleAdminLogin = async (event) => {
     await signInWithEmailAndPassword(auth, email, password);
     setStatus(adminLoginStatus, '');
   } catch (error) {
-    setStatus(adminLoginStatus, `Unable to sign in: ${error.message}`, true);
+    setStatus(adminLoginStatus, `Unable to sign in: ${describeFirebaseError(error, 'Unable to sign in.')}`, true);
   }
 };
 
@@ -564,7 +586,7 @@ const handleLogout = async () => {
     setStatus(adminLoadingStatus, 'Signing out...');
     await signOut(auth);
   } catch (error) {
-    setStatus(adminLoginStatus, `Unable to sign out: ${error.message}`, true);
+    setStatus(adminLoginStatus, `Unable to sign out: ${describeFirebaseError(error, 'Unable to sign out.')}`, true);
   }
 };
 
@@ -603,7 +625,7 @@ const init = async () => {
   try {
     await refreshBootstrapState();
   } catch (error) {
-    setFatalState(`Unable to check bootstrap state: ${error.message}`);
+    setFatalState(`Unable to check bootstrap state: ${describeFirebaseError(error, 'Unable to check bootstrap state.')}`);
     return;
   }
 
