@@ -7,6 +7,5 @@ window.VLADDER_CONFIG = {
     messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
     appId: 'YOUR_FIREBASE_APP_ID',
   },
-  adminPassword: 'set-a-strong-password',
   defaultPhotoUrl: 'https://via.placeholder.com/120x120.png?text=VL',
 };

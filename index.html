@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The VLadder</title>
+    <title>The VLadder | Vault Roofing</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="./config.js"></script>
   </head>
@@ -11,39 +11,51 @@
     <div class="page-shell">
       <header class="hero">
         <div>
-          <p class="eyebrow">Live Performance</p>
+          <p class="eyebrow">Vault Roofing</p>
           <h1>The VLadder</h1>
-          <p class="subtext">Track team appointments in real time and climb the board.</p>
+          <p class="subtext">Live appointment competition. Submit, climb, and lead.</p>
         </div>
-        <a class="admin-link" href="./admin.html">Admin</a>
+        <a class="admin-link" href="./admin.html">Admin Dashboard</a>
       </header>
 
       <main class="content-grid">
-        <section class="panel">
-          <h2>Submit Booked Appointments</h2>
-          <form id="submission-form" class="stack">
+        <section class="panel submission-panel">
+          <h2>Log a Booked Appointment</h2>
+          <form id="submission-form" class="stack" novalidate>
             <label>
-              Team Member
-              <select id="member-select" required></select>
+              Select Team Member
+              <input id="member-search" list="member-options" placeholder="Type a team member name" autocomplete="off" required />
+              <datalist id="member-options"></datalist>
             </label>
+
             <label>
-              Date
+              Appointment Date
               <input id="appointment-date" type="date" required />
             </label>
+
             <label>
-              Appointments Booked
-              <input id="appointments-booked" type="number" min="1" step="1" required />
+              Note (optional)
+              <textarea id="appointment-note" rows="3" maxlength="300" placeholder="Optional context for admin review"></textarea>
             </label>
-            <button type="submit">Submit Result</button>
+
+            <button type="submit">Submit Appointment</button>
             <p id="submission-status" class="status"></p>
           </form>
         </section>
 
         <section class="panel leaderboard-panel">
           <div class="leaderboard-head">
-            <h2>Leaderboard</h2>
-            <p id="last-updated">Waiting for live updates…</p>
+            <div>
+              <h2>Leaderboard</h2>
+              <p id="last-updated">Waiting for live updates…</p>
+            </div>
+            <div class="tab-group" role="tablist" aria-label="Leaderboard sorting">
+              <button type="button" class="tab is-active" data-sort="bookedAppointments" role="tab" aria-selected="true">Booked Appointments</button>
+              <button type="button" class="tab" data-sort="demos" role="tab" aria-selected="false">Demos</button>
+              <button type="button" class="tab" data-sort="estimatedRevenue" role="tab" aria-selected="false">Estimated Revenue</button>
+            </div>
           </div>
+          <p id="leaderboard-status" class="status"></p>
           <div id="leaderboard" class="leaderboard"></div>
         </section>
       </main>

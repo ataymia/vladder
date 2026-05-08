@@ -1,12 +1,11 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
-  Timestamp,
   addDoc,
   collection,
   deleteDoc,
   doc,
-  getDoc,
   getFirestore,
+  increment,
   onSnapshot,
   orderBy,
   query,
@@ -14,30 +13,46 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const config = window.VLADDER_CONFIG;
-if (!config || !config.firebase) {
-  throw new Error('Missing VLADDER_CONFIG.firebase in config.js');
+const config = window.VLADDER_CONFIG || {};
+let db = null;
+let firebaseInitError = null;
+
+try {
+  if (!config.firebase || !config.firebase.apiKey || !config.firebase.projectId || !config.firebase.appId) {
+    throw new Error('Missing Firebase config. Update config.js with your project credentials.');
+  }
+  const app = initializeApp(config.firebase);
+  db = getFirestore(app);
+} catch (error) {
+  firebaseInitError = error;
 }
 
-const app = initializeApp(config.firebase);
-const db = getFirestore(app);
+const requireDb = () => {
+  if (!db) {
+    throw firebaseInitError || new Error('Firebase initialization failed.');
+  }
+  return db;
+};
 
 export {
-  Timestamp,
   addDoc,
   collection,
   config,
   db,
   deleteDoc,
   doc,
-  getDoc,
+  firebaseInitError,
+  increment,
   onSnapshot,
   orderBy,
   query,
+  requireDb,
   runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 };

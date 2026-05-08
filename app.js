@@ -1,109 +1,184 @@
 import {
-  addDoc,
   collection,
-  config,
   db,
   doc,
+  firebaseInitError,
+  increment,
   onSnapshot,
-  orderBy,
   query,
   runTransaction,
   serverTimestamp,
 } from './firebase.js';
 
-const memberSelect = document.getElementById('member-select');
+const memberSearchInput = document.getElementById('member-search');
+const memberOptions = document.getElementById('member-options');
 const dateInput = document.getElementById('appointment-date');
-const appointmentsInput = document.getElementById('appointments-booked');
+const noteInput = document.getElementById('appointment-note');
 const submissionForm = document.getElementById('submission-form');
-const statusLine = document.getElementById('submission-status');
+const submissionStatus = document.getElementById('submission-status');
+const leaderboardStatus = document.getElementById('leaderboard-status');
 const leaderboardEl = document.getElementById('leaderboard');
 const updatedLine = document.getElementById('last-updated');
+const tabButtons = Array.from(document.querySelectorAll('.tab'));
 
-const defaultPhoto = config.defaultPhotoUrl || 'https://via.placeholder.com/120x120.png?text=VL';
-let members = [];
+const DEFAULT_PHOTO =
+  (window.VLADDER_CONFIG && window.VLADDER_CONFIG.defaultPhotoUrl) ||
+  'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=240&q=80';
 
-const formatMoney = (value) =>
+let allMembers = [];
+let displayMembers = [];
+let sortMode = 'bookedAppointments';
+const previousRanks = new Map();
+const recentlyUpdated = new Set();
+
+const formatCurrency = (value) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(Number(value || 0));
 
-const compareMembers = (a, b) =>
-  Number(b.appointmentsBooked || 0) - Number(a.appointmentsBooked || 0) ||
-  Number(b.demos || 0) - Number(a.demos || 0) ||
-  Number(b.revenue || 0) - Number(a.revenue || 0) ||
-  (a.name || '').localeCompare(b.name || '');
-
-const setStatus = (message, isError = false) => {
-  statusLine.textContent = message;
-  statusLine.className = `status ${message ? (isError ? 'error' : 'success') : ''}`.trim();
+const calculateDemoRate = (demos) => {
+  const parsed = Number(demos || 0);
+  if (parsed >= 60) return 10;
+  if (parsed >= 40) return 7;
+  if (parsed >= 20) return 5;
+  return 0;
 };
 
-const updateMemberSelect = () => {
-  const previousValue = memberSelect.value;
-  memberSelect.innerHTML = '';
+const calculateBonusEstimate = (demos) => Number(demos || 0) * calculateDemoRate(demos);
 
-  if (!members.length) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = 'No members available yet';
-    memberSelect.append(option);
-    memberSelect.disabled = true;
+const formatTier = (demos) => `$${calculateDemoRate(demos)}/demo tier`;
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const setStatus = (target, message, isError = false) => {
+  target.textContent = message;
+  target.className = `status ${message ? (isError ? 'error' : 'success') : ''}`.trim();
+};
+
+const sortMembers = (members, mode) => {
+  const metric = (member, key) => Number(member[key] || 0);
+  return members.slice().sort((a, b) => {
+    const metricDiff = metric(b, mode) - metric(a, mode);
+    if (metricDiff !== 0) return metricDiff;
+
+    const tieBreakers = [
+      ['demos', metric(b, 'demos') - metric(a, 'demos')],
+      ['bookedAppointments', metric(b, 'bookedAppointments') - metric(a, 'bookedAppointments')],
+      ['estimatedRevenue', metric(b, 'estimatedRevenue') - metric(a, 'estimatedRevenue')],
+    ];
+
+    for (const [, diff] of tieBreakers) {
+      if (diff !== 0) return diff;
+    }
+
+    return (a.name || '').localeCompare(b.name || '');
+  });
+};
+
+const buildBadges = (member, index, leaders, movedUp) => {
+  const badges = [];
+  if (index === 0) badges.push('Champion');
+  if (member.id === leaders.topBookerId) badges.push('Top Booker');
+  if (member.id === leaders.demoLeaderId) badges.push('Demo Leader');
+  if (member.id === leaders.revenueLeaderId) badges.push('Revenue Leader');
+  if (movedUp) badges.push('Climber');
+  return badges;
+};
+
+const updateMemberAutocomplete = () => {
+  const previous = memberSearchInput.value;
+  memberOptions.innerHTML = '';
+
+  if (!allMembers.length) {
+    memberSearchInput.value = '';
+    memberSearchInput.disabled = true;
+    memberSearchInput.placeholder = 'No team members available yet';
     return;
   }
 
-  memberSelect.disabled = false;
-  members.forEach((member) => {
-    const option = document.createElement('option');
-    option.value = member.id;
-    option.textContent = member.name;
-    memberSelect.append(option);
-  });
+  memberSearchInput.disabled = false;
+  memberSearchInput.placeholder = 'Type a team member name';
+  allMembers
+    .slice()
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    .forEach((member) => {
+      const option = document.createElement('option');
+      option.value = member.name;
+      memberOptions.append(option);
+    });
 
-  if (members.some((member) => member.id === previousValue)) {
-    memberSelect.value = previousValue;
-  }
+  const exactExists = allMembers.some((member) => member.name === previous);
+  memberSearchInput.value = exactExists ? previous : '';
+};
+
+const findMemberBySearchValue = () => {
+  const normalized = memberSearchInput.value.trim().toLowerCase();
+  return allMembers.find((member) => (member.name || '').toLowerCase() === normalized);
 };
 
 const renderLeaderboard = () => {
-  const cards = Array.from(leaderboardEl.children).reduce((acc, child) => {
-    acc[child.dataset.memberId] = child;
-    return acc;
-  }, {});
-
-  const firstRects = {};
-  Object.entries(cards).forEach(([id, node]) => {
-    firstRects[id] = node.getBoundingClientRect();
-  });
+  const previousCards = Array.from(leaderboardEl.children).reduce((map, card) => {
+    map.set(card.dataset.memberId, card.getBoundingClientRect());
+    return map;
+  }, new Map());
 
   leaderboardEl.innerHTML = '';
 
-  members.forEach((member, index) => {
+  if (!displayMembers.length) {
+    setStatus(leaderboardStatus, 'No active team members yet. Ask admin to add members.');
+    return;
+  }
+
+  setStatus(leaderboardStatus, 'Leaderboard updated');
+
+  const leaders = {
+    topBookerId: sortMembers(displayMembers, 'bookedAppointments')[0]?.id,
+    demoLeaderId: sortMembers(displayMembers, 'demos')[0]?.id,
+    revenueLeaderId: sortMembers(displayMembers, 'estimatedRevenue')[0]?.id,
+  };
+
+  displayMembers.forEach((member, index) => {
     const rank = index + 1;
+    const previousRank = previousRanks.get(member.id) || rank;
+    const movedUp = rank < previousRank;
+    const badges = buildBadges(member, index, leaders, movedUp);
+    const bonusEstimate = calculateBonusEstimate(member.demos);
+
     const card = document.createElement('article');
-    card.className = `member-card rank-${rank}`;
     card.dataset.memberId = member.id;
+    card.className = `member-card rank-${Math.min(rank, 4)} ${recentlyUpdated.has(member.id) ? 'recent-update' : ''}`;
+    const safeName = escapeHtml(member.name || 'Unknown');
+    const safePhoto = escapeHtml(member.photoUrl || DEFAULT_PHOTO);
     card.innerHTML = `
       <div class="rank-pill">#${rank}</div>
-      <img class="member-photo" src="${member.photoUrl || defaultPhoto}" alt="${member.name}" loading="lazy" />
+      <img class="member-photo" src="${safePhoto}" alt="${safeName}" loading="lazy" />
       <div>
-        <div class="member-name">${member.name}</div>
+        <div class="member-name">${safeName}</div>
+        <div class="badge-row">${badges.map((badge) => `<span class="badge">${escapeHtml(badge)}</span>`).join('')}</div>
         <div class="metrics">
-          <span>Booked: <strong>${Number(member.appointmentsBooked || 0)}</strong></span>
+          <span>Booked Appointments: <strong>${Number(member.bookedAppointments || 0)}</strong></span>
           <span>Demos: <strong>${Number(member.demos || 0)}</strong></span>
-          <span>Revenue: <strong>${formatMoney(member.revenue)}</strong></span>
-          <span>Bonus Tier: <strong>${member.bonusTier || 'Starter'}</strong></span>
+          <span>Estimated Revenue: <strong>${formatCurrency(member.estimatedRevenue)}</strong></span>
+          <span>Demo Bonus Estimate: <strong>${formatCurrency(bonusEstimate)}</strong></span>
+          <span>Current Tier: <strong>${formatTier(member.demos)}</strong></span>
         </div>
       </div>
       <div class="metric-highlight">
-        ${Number(member.appointmentsBooked || 0)}
-        <span>appointments</span>
+        ${Number(member[sortMode] || 0)}
+        <span>${sortMode === 'bookedAppointments' ? 'booked' : sortMode === 'estimatedRevenue' ? 'revenue score' : 'demos'}</span>
       </div>
     `;
+
     leaderboardEl.append(card);
 
-    const oldRect = firstRects[member.id];
+    const oldRect = previousCards.get(member.id);
     if (oldRect) {
       const newRect = card.getBoundingClientRect();
       const deltaY = oldRect.top - newRect.top;
@@ -113,78 +188,130 @@ const renderLeaderboard = () => {
             { transform: `translateY(${deltaY}px)` },
             { transform: 'translateY(0)' },
           ],
-          { duration: 360, easing: 'ease-out' },
+          { duration: 400, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
         );
       }
     }
+
+    previousRanks.set(member.id, rank);
+  });
+
+  updatedLine.textContent = `Last updated ${new Date().toLocaleTimeString()}`;
+};
+
+const bindTabs = () => {
+  tabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      sortMode = button.dataset.sort;
+      tabButtons.forEach((tab) => {
+        const isActive = tab === button;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+      });
+      displayMembers = sortMembers(allMembers.filter((member) => member.active !== false), sortMode);
+      renderLeaderboard();
+    });
   });
 };
 
-const subscribeMembers = () => {
-  const membersQuery = query(collection(db, 'members'));
+const subscribeTeamMembers = () => {
+  const membersQuery = query(collection(db, 'teamMembers'));
   onSnapshot(
     membersQuery,
     (snapshot) => {
-      members = snapshot.docs
-        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-        .sort(compareMembers);
-      updateMemberSelect();
+      const previousById = new Map(allMembers.map((member) => [member.id, member]));
+      const incoming = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+
+      recentlyUpdated.clear();
+      incoming.forEach((member) => {
+        const previous = previousById.get(member.id);
+        if (!previous) return;
+        const bookedChanged = Number(previous.bookedAppointments || 0) !== Number(member.bookedAppointments || 0);
+        const demosChanged = Number(previous.demos || 0) !== Number(member.demos || 0);
+        const revenueChanged = Number(previous.estimatedRevenue || 0) !== Number(member.estimatedRevenue || 0);
+        if (bookedChanged || demosChanged || revenueChanged) {
+          recentlyUpdated.add(member.id);
+        }
+      });
+
+      allMembers = incoming;
+      displayMembers = sortMembers(allMembers.filter((member) => member.active !== false), sortMode);
+      updateMemberAutocomplete();
       renderLeaderboard();
-      updatedLine.textContent = `Last updated ${new Date().toLocaleTimeString()}`;
     },
     (error) => {
-      setStatus(`Live update failed: ${error.message}`, true);
+      setStatus(leaderboardStatus, `Live update failed: ${error.message}`, true);
     },
   );
 };
 
-const initializeForm = () => {
+const bindSubmissionForm = () => {
   dateInput.valueAsDate = new Date();
 
   submissionForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    setStatus('Submitting...');
+    setStatus(submissionStatus, 'Submitting appointment...');
 
-    const memberId = memberSelect.value;
-    const member = members.find((item) => item.id === memberId);
-    const booked = Number(appointmentsInput.value);
+    const member = findMemberBySearchValue();
+    const appointmentDate = dateInput.value;
+    const note = noteInput.value.trim();
 
-    if (!memberId || !member) {
-      setStatus('Select a valid team member.', true);
+    if (!member) {
+      setStatus(submissionStatus, 'Select Team Member from the list.', true);
       return;
     }
-    if (!Number.isFinite(booked) || booked < 1) {
-      setStatus('Booked appointments must be at least 1.', true);
+    if (!appointmentDate || Number.isNaN(new Date(appointmentDate).getTime())) {
+      setStatus(submissionStatus, 'Appointment Date is required.', true);
       return;
     }
 
     try {
-      const memberRef = doc(db, 'members', memberId);
       await runTransaction(db, async (transaction) => {
-        const memberSnap = await transaction.get(memberRef);
-        if (!memberSnap.exists()) {
-          throw new Error('Member not found.');
-        }
+        const memberRef = doc(db, 'teamMembers', member.id);
+        transaction.update(memberRef, {
+          bookedAppointments: increment(1),
+          updatedAt: serverTimestamp(),
+        });
 
-        const currentAppointments = Number(memberSnap.data().appointmentsBooked || 0);
-        transaction.update(memberRef, { appointmentsBooked: currentAppointments + booked });
-        transaction.set(doc(collection(db, 'submissions')), {
-          memberId,
-          memberName: member.name,
-          appointmentDate: dateInput.value,
-          booked,
+        const submissionRef = doc(collection(db, 'appointmentSubmissions'));
+        transaction.set(submissionRef, {
+          teamMemberId: member.id,
+          teamMemberName: member.name,
+          appointmentDate,
+          note,
+          reviewed: false,
           createdAt: serverTimestamp(),
         });
       });
 
-      submissionForm.reset();
+      setStatus(submissionStatus, 'Submit Appointment successful. Leaderboard updated.');
+      noteInput.value = '';
       dateInput.valueAsDate = new Date();
-      setStatus('Submission recorded successfully.');
     } catch (error) {
-      setStatus(`Unable to submit: ${error.message}`, true);
+      setStatus(submissionStatus, `Unable to submit appointment: ${error.message}`, true);
     }
   });
 };
 
-subscribeMembers();
-initializeForm();
+const showInitError = (message) => {
+  setStatus(leaderboardStatus, message, true);
+  setStatus(submissionStatus, message, true);
+  submissionForm.querySelector('button[type="submit"]').disabled = true;
+  memberSearchInput.disabled = true;
+  dateInput.disabled = true;
+  noteInput.disabled = true;
+};
+
+const init = () => {
+  bindTabs();
+  bindSubmissionForm();
+
+  if (!db || firebaseInitError) {
+    showInitError(firebaseInitError?.message || 'Firebase is not configured.');
+    return;
+  }
+
+  subscribeTeamMembers();
+};
+
+init();
