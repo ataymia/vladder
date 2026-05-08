@@ -284,7 +284,7 @@ const bindSubmissionForm = () => {
         });
       });
 
-      setStatus(submissionStatus, 'Submit Appointment successful. Leaderboard updated.');
+      setStatus(submissionStatus, 'Appointment submitted successfully. Leaderboard updated.');
       noteInput.value = '';
       dateInput.valueAsDate = new Date();
     } catch (error) {
