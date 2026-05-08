@@ -3,24 +3,51 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The VLadder | Vault Roofing</title>
+    <title>VLadder</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="./config.js"></script>
   </head>
   <body>
-    <div class="page-shell">
-      <header class="hero">
+    <div class="page-shell public-shell">
+      <header class="hero leaderboard-hero">
         <div>
-          <p class="eyebrow">Vault Roofing</p>
-          <h1>The VLadder</h1>
-          <p class="subtext">Live appointment competition. Submit, climb, and lead.</p>
+          <h1>VLadder</h1>
+          <p class="subtext">Live leaderboard</p>
         </div>
         <a class="admin-link" href="./admin.html">Admin Dashboard</a>
       </header>
 
-      <main class="content-grid">
-        <section class="panel submission-panel">
-          <h2>Log a Booked Appointment</h2>
+      <main class="leaderboard-screen">
+        <section class="panel leaderboard-panel leaderboard-panel-fullscreen">
+          <div class="leaderboard-head leaderboard-head-compact">
+            <div>
+              <h2>Leaderboard</h2>
+              <p id="last-updated">Waiting for live updates...</p>
+            </div>
+            <div class="tab-group" role="tablist" aria-label="Leaderboard sorting">
+              <button type="button" class="tab is-active" data-sort="bookedAppointments" role="tab" aria-selected="true">Booked Appointments</button>
+              <button type="button" class="tab" data-sort="demos" role="tab" aria-selected="false">Demos</button>
+              <button type="button" class="tab" data-sort="estimatedRevenue" role="tab" aria-selected="false">Estimated Revenue</button>
+            </div>
+          </div>
+          <p id="leaderboard-status" class="status"></p>
+          <div id="leaderboard" class="leaderboard"></div>
+        </section>
+      </main>
+
+      <button type="button" id="open-submission-modal" class="floating-action-button">Log Booked Appointment</button>
+
+      <div id="submission-modal" class="modal hidden" aria-hidden="true">
+        <div id="submission-modal-backdrop" class="modal-backdrop"></div>
+        <section class="modal-dialog panel" role="dialog" aria-modal="true" aria-labelledby="submission-modal-title">
+          <div class="modal-header">
+            <div>
+              <h2 id="submission-modal-title">Log a Booked Appointment</h2>
+              <p class="subtext">Record the appointment without leaving the live board.</p>
+            </div>
+            <button type="button" id="close-submission-modal" class="icon-button secondary" aria-label="Close appointment form">Close</button>
+          </div>
+
           <form id="submission-form" class="stack" novalidate>
             <label>
               Select Team Member
@@ -39,27 +66,14 @@
               <small id="note-count" class="hint">0 / 300</small>
             </label>
 
-            <button type="submit">Submit Appointment</button>
+            <div class="button-row modal-actions">
+              <button type="submit">Submit Appointment</button>
+              <button type="button" id="cancel-submission-modal" class="secondary">Cancel</button>
+            </div>
             <p id="submission-status" class="status"></p>
           </form>
         </section>
-
-        <section class="panel leaderboard-panel">
-          <div class="leaderboard-head">
-            <div>
-              <h2>Leaderboard</h2>
-              <p id="last-updated">Waiting for live updates…</p>
-            </div>
-            <div class="tab-group" role="tablist" aria-label="Leaderboard sorting">
-              <button type="button" class="tab is-active" data-sort="bookedAppointments" role="tab" aria-selected="true">Booked Appointments</button>
-              <button type="button" class="tab" data-sort="demos" role="tab" aria-selected="false">Demos</button>
-              <button type="button" class="tab" data-sort="estimatedRevenue" role="tab" aria-selected="false">Estimated Revenue</button>
-            </div>
-          </div>
-          <p id="leaderboard-status" class="status"></p>
-          <div id="leaderboard" class="leaderboard"></div>
-        </section>
-      </main>
+      </div>
     </div>
 
     <script type="module" src="./app.js"></script>

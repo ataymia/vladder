@@ -21,6 +21,11 @@ const leaderboardStatus = document.getElementById('leaderboard-status');
 const leaderboardEl = document.getElementById('leaderboard');
 const updatedLine = document.getElementById('last-updated');
 const tabButtons = Array.from(document.querySelectorAll('.tab'));
+const submissionModal = document.getElementById('submission-modal');
+const submissionModalBackdrop = document.getElementById('submission-modal-backdrop');
+const openSubmissionModalButton = document.getElementById('open-submission-modal');
+const closeSubmissionModalButton = document.getElementById('close-submission-modal');
+const cancelSubmissionModalButton = document.getElementById('cancel-submission-modal');
 
 const DEFAULT_PHOTO =
   (window.VLADDER_CONFIG && window.VLADDER_CONFIG.defaultPhotoUrl) ||
@@ -31,6 +36,14 @@ let displayMembers = [];
 let sortMode = 'bookedAppointments';
 const previousRanks = new Map();
 const recentlyUpdated = new Set();
+const sortLabels = {
+  bookedAppointments: 'Booked Appointments',
+  demos: 'Demos',
+  estimatedRevenue: 'Estimated Revenue',
+};
+
+let submissionSuccessTimeoutId = null;
+let modalReturnFocusTarget = null;
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-US', {
@@ -57,6 +70,19 @@ const escapeHtml = (value) =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+
+const formatSortMetric = (member, mode) => {
+  if (mode === 'estimatedRevenue') {
+    return formatCurrency(member.estimatedRevenue);
+  }
+  return Number(member[mode] || 0).toLocaleString('en-US');
+};
+
+const clearSubmissionSuccessTimer = () => {
+  if (!submissionSuccessTimeoutId) return;
+  window.clearTimeout(submissionSuccessTimeoutId);
+  submissionSuccessTimeoutId = null;
+};
 
 const setStatus = (target, message, isError = false) => {
   target.textContent = message;
@@ -124,6 +150,51 @@ const findMemberBySearchValue = () => {
   return allMembers.find((member) => (member.name || '').toLowerCase() === normalized);
 };
 
+const closeSubmissionModal = ({ restoreFocus = true, clearStatus = false } = {}) => {
+  if (!submissionModal) return;
+
+  clearSubmissionSuccessTimer();
+  submissionModal.classList.add('hidden');
+  submissionModal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+
+  if (clearStatus) {
+    setStatus(submissionStatus, '');
+  }
+
+  const focusTarget = modalReturnFocusTarget || openSubmissionModalButton;
+  if (restoreFocus && focusTarget?.focus) {
+    focusTarget.focus();
+  }
+};
+
+const openSubmissionModal = () => {
+  if (!submissionModal || openSubmissionModalButton?.disabled) return;
+
+  clearSubmissionSuccessTimer();
+  modalReturnFocusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : openSubmissionModalButton;
+  submissionModal.classList.remove('hidden');
+  submissionModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  setStatus(submissionStatus, '');
+
+  const focusTarget = memberSearchInput.disabled ? dateInput : memberSearchInput;
+  focusTarget.focus();
+};
+
+const bindSubmissionModal = () => {
+  openSubmissionModalButton?.addEventListener('click', openSubmissionModal);
+  closeSubmissionModalButton?.addEventListener('click', () => closeSubmissionModal({ clearStatus: true }));
+  cancelSubmissionModalButton?.addEventListener('click', () => closeSubmissionModal({ clearStatus: true }));
+  submissionModalBackdrop?.addEventListener('click', () => closeSubmissionModal({ clearStatus: true }));
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && submissionModal && !submissionModal.classList.contains('hidden')) {
+      closeSubmissionModal({ clearStatus: true });
+    }
+  });
+};
+
 const renderLeaderboard = () => {
   const previousCards = Array.from(leaderboardEl.children).reduce((map, card) => {
     map.set(card.dataset.memberId, card.getBoundingClientRect());
@@ -150,7 +221,14 @@ const renderLeaderboard = () => {
     const previousRank = previousRanks.get(member.id) || rank;
     const movedUp = rank < previousRank;
     const badges = buildBadges(member, index, leaders, movedUp);
+    const badgeMarkup = badges.length
+      ? `<div class="badge-row">${badges.map((badge) => `<span class="badge">${escapeHtml(badge)}</span>`).join('')}</div>`
+      : '';
     const bonusEstimate = calculateBonusEstimate(member.demos);
+    const highlightValue = escapeHtml(formatSortMetric(member, sortMode));
+    const highlightLabel = escapeHtml(sortLabels[sortMode] || 'Score');
+    const bookedAppointments = Number(member.bookedAppointments || 0).toLocaleString('en-US');
+    const demos = Number(member.demos || 0).toLocaleString('en-US');
 
     const card = document.createElement('article');
     card.dataset.memberId = member.id;
@@ -158,22 +236,40 @@ const renderLeaderboard = () => {
     const safeName = escapeHtml(member.name || 'Unknown');
     const safePhoto = escapeHtml(member.photoUrl || DEFAULT_PHOTO);
     card.innerHTML = `
-      <div class="rank-pill">#${rank}</div>
+      <div class="rank-pill">
+        <span class="rank-number">#${rank}</span>
+        <span class="rank-label">Rank</span>
+      </div>
       <img class="member-photo" src="${safePhoto}" alt="${safeName}" loading="lazy" />
-      <div>
+      <div class="member-main">
         <div class="member-name">${safeName}</div>
-        <div class="badge-row">${badges.map((badge) => `<span class="badge">${escapeHtml(badge)}</span>`).join('')}</div>
+        ${badgeMarkup}
         <div class="metrics">
-          <span>Booked Appointments: <strong>${Number(member.bookedAppointments || 0)}</strong></span>
-          <span>Demos: <strong>${Number(member.demos || 0)}</strong></span>
-          <span>Estimated Revenue: <strong>${formatCurrency(member.estimatedRevenue)}</strong></span>
-          <span>Demo Bonus Estimate: <strong>${formatCurrency(bonusEstimate)}</strong></span>
-          <span>Current Tier: <strong>${formatTier(member.demos)}</strong></span>
+          <div class="stat-chip">
+            <span>Booked Appointments</span>
+            <strong>${bookedAppointments}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>Demos</span>
+            <strong>${demos}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>Estimated Revenue</span>
+            <strong>${formatCurrency(member.estimatedRevenue)}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>Demo Bonus Estimate</span>
+            <strong>${formatCurrency(bonusEstimate)}</strong>
+          </div>
+          <div class="stat-chip stat-chip-wide">
+            <span>Current Tier</span>
+            <strong>${formatTier(member.demos)}</strong>
+          </div>
         </div>
       </div>
       <div class="metric-highlight">
-        ${Number(member[sortMode] || 0)}
-        <span>${sortMode === 'bookedAppointments' ? 'booked' : sortMode === 'estimatedRevenue' ? 'revenue score' : 'demos'}</span>
+        ${highlightValue}
+        <span>${highlightLabel}</span>
       </div>
     `;
 
@@ -301,6 +397,9 @@ const bindSubmissionForm = () => {
       noteInput.value = '';
       refreshNoteCount();
       dateInput.valueAsDate = new Date();
+      submissionSuccessTimeoutId = window.setTimeout(() => {
+        closeSubmissionModal({ clearStatus: true });
+      }, 800);
     } catch (error) {
       setStatus(submissionStatus, `Unable to submit appointment: ${error.message}`, true);
     }
@@ -311,6 +410,9 @@ const showInitError = (message) => {
   setStatus(leaderboardStatus, message, true);
   setStatus(submissionStatus, message, true);
   submissionForm.querySelector('button[type="submit"]').disabled = true;
+  if (openSubmissionModalButton) {
+    openSubmissionModalButton.disabled = true;
+  }
   memberSearchInput.disabled = true;
   dateInput.disabled = true;
   noteInput.disabled = true;
@@ -318,6 +420,7 @@ const showInitError = (message) => {
 
 const init = () => {
   bindTabs();
+  bindSubmissionModal();
   bindSubmissionForm();
 
   if (!db || firebaseInitError) {
