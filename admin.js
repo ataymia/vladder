@@ -14,6 +14,7 @@ import {
 
 // Internal static-site gate only. Must be changed before deployment and does not replace server-side authentication.
 const ADMIN_PASSWORD = 'CHANGE_ME';
+const ACTIVE_ADMIN_PASSWORD = (window.VLADDER_CONFIG && window.VLADDER_CONFIG.adminPassword) || ADMIN_PASSWORD;
 const ACCESS_KEY = 'vladder_admin_access';
 const DEFAULT_PHOTO =
   (window.VLADDER_CONFIG && window.VLADDER_CONFIG.defaultPhotoUrl) ||
@@ -241,20 +242,23 @@ const handleMemberSave = async (event) => {
   }
 
   try {
-    await setDoc(
-      doc(db, 'teamMembers', memberId),
-      {
+    const memberRef = doc(db, 'teamMembers', memberId);
+    await runTransaction(db, async (transaction) => {
+      const memberSnapshot = await transaction.get(memberRef);
+      const payload = {
         name,
         photoUrl,
         bookedAppointments,
         demos,
         estimatedRevenue,
         active,
-        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
+      };
+      if (!memberSnapshot.exists()) {
+        payload.createdAt = serverTimestamp();
+      }
+      transaction.set(memberRef, payload, { merge: true });
+    });
 
     setStatus(memberFormStatus, 'Team member saved.');
     if (!selectedId) {
@@ -315,7 +319,7 @@ const bindEvents = () => {
   adminLoginForm.addEventListener('submit', (event) => {
     event.preventDefault();
 
-    if (adminPasswordInput.value !== ADMIN_PASSWORD) {
+    if (adminPasswordInput.value !== ACTIVE_ADMIN_PASSWORD) {
       setStatus(adminLoginStatus, 'Incorrect password.', true);
       return;
     }

@@ -14,6 +14,7 @@ const memberSearchInput = document.getElementById('member-search');
 const memberOptions = document.getElementById('member-options');
 const dateInput = document.getElementById('appointment-date');
 const noteInput = document.getElementById('appointment-note');
+const noteCount = document.getElementById('note-count');
 const submissionForm = document.getElementById('submission-form');
 const submissionStatus = document.getElementById('submission-status');
 const leaderboardStatus = document.getElementById('leaderboard-status');
@@ -247,6 +248,11 @@ const subscribeTeamMembers = () => {
 
 const bindSubmissionForm = () => {
   dateInput.valueAsDate = new Date();
+  const refreshNoteCount = () => {
+    noteCount.textContent = `${noteInput.value.length} / ${noteInput.maxLength}`;
+  };
+  refreshNoteCount();
+  noteInput.addEventListener('input', refreshNoteCount);
 
   submissionForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -255,6 +261,9 @@ const bindSubmissionForm = () => {
     const member = findMemberBySearchValue();
     const appointmentDate = dateInput.value;
     const note = noteInput.value.trim();
+    const selectedDate = new Date(`${appointmentDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     if (!member) {
       setStatus(submissionStatus, 'Select Team Member from the list.', true);
@@ -262,6 +271,10 @@ const bindSubmissionForm = () => {
     }
     if (!appointmentDate || Number.isNaN(new Date(appointmentDate).getTime())) {
       setStatus(submissionStatus, 'Appointment Date is required.', true);
+      return;
+    }
+    if (selectedDate > today) {
+      setStatus(submissionStatus, 'Appointment Date cannot be in the future.', true);
       return;
     }
 
@@ -286,6 +299,7 @@ const bindSubmissionForm = () => {
 
       setStatus(submissionStatus, 'Appointment submitted successfully. Leaderboard updated.');
       noteInput.value = '';
+      refreshNoteCount();
       dateInput.valueAsDate = new Date();
     } catch (error) {
       setStatus(submissionStatus, `Unable to submit appointment: ${error.message}`, true);

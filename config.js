@@ -7,5 +7,6 @@ window.VLADDER_CONFIG = {
     messagingSenderId: 'REPLACE_ME',
     appId: 'REPLACE_ME',
   },
+  adminPassword: 'CHANGE_ME',
   defaultPhotoUrl: 'https://via.placeholder.com/120x120.png?text=VL',
 };

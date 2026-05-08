@@ -18,7 +18,7 @@ The VLadder is a static HTML/CSS/JS leaderboard app for Vault Roofing with real-
 1. Create a Firebase project and enable Firestore.
 2. Copy `config.example.js` to `config.js`.
 3. Fill in Firebase values in `config.js`.
-4. Set `ADMIN_PASSWORD` in `admin.js`.
+4. Set `ADMIN_PASSWORD` in `admin.js` (or set `adminPassword` in `config.js`).
 5. Open `index.html`.
 
 ## Firestore Collections
@@ -48,4 +48,4 @@ The VLadder is a static HTML/CSS/JS leaderboard app for Vault Roofing with real-
 - Booked appointments are incremented atomically with Firestore `increment(1)` in a transaction.
 - Leaderboard supports ranking tabs: Booked Appointments, Demos, and Estimated Revenue.
 - Admin can add/edit/deactivate team members, filter/mark/delete submissions, and manually correct stats.
-- `admin.html` password gating is client-side for internal convenience only; use stricter auth if this is exposed publicly.
+- `admin.html` password gating is client-side only and not secure for public internet exposure. Use real server-side authentication for production security.
