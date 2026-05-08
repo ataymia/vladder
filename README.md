@@ -4,22 +4,22 @@ The VLadder is a static HTML/CSS/JS leaderboard app for Vault Roofing with real-
 
 ## Files
 
-- `/home/runner/work/vladder/vladder/index.html` — team-facing live leaderboard and quick submission form
-- `/home/runner/work/vladder/vladder/admin.html` — password-gated management dashboard
-- `/home/runner/work/vladder/vladder/styles.css` — dark navy/black polished UI theme
-- `/home/runner/work/vladder/vladder/firebase.js` — Firebase initialization and shared Firestore exports
-- `/home/runner/work/vladder/vladder/app.js` — public leaderboard logic (sorting tabs, realtime cards, animated reordering)
-- `/home/runner/work/vladder/vladder/admin.js` — admin member/submission management logic
-- `/home/runner/work/vladder/vladder/config.example.js` — Firebase config template
-- `/home/runner/work/vladder/vladder/config.js` — local Firebase config file
+- `index.html` — team-facing live leaderboard and quick submission form
+- `admin.html` — password-gated management dashboard
+- `styles.css` — dark navy/black polished UI theme
+- `firebase.js` — Firebase initialization and shared Firestore exports
+- `app.js` — public leaderboard logic (sorting tabs, realtime cards, animated reordering)
+- `admin.js` — admin member/submission management logic
+- `config.example.js` — Firebase config template
+- `config.js` — local Firebase config file
 
 ## Setup
 
 1. Create a Firebase project and enable Firestore.
-2. Copy `/home/runner/work/vladder/vladder/config.example.js` to `/home/runner/work/vladder/vladder/config.js`.
+2. Copy `config.example.js` to `config.js`.
 3. Fill in Firebase values in `config.js`.
-4. Set `ADMIN_PASSWORD` in `/home/runner/work/vladder/vladder/admin.js`.
-5. Open `/home/runner/work/vladder/vladder/index.html`.
+4. Set `ADMIN_PASSWORD` in `admin.js`.
+5. Open `index.html`.
 
 ## Firestore Collections
 
@@ -48,3 +48,4 @@ The VLadder is a static HTML/CSS/JS leaderboard app for Vault Roofing with real-
 - Booked appointments are incremented atomically with Firestore `increment(1)` in a transaction.
 - Leaderboard supports ranking tabs: Booked Appointments, Demos, and Estimated Revenue.
 - Admin can add/edit/deactivate team members, filter/mark/delete submissions, and manually correct stats.
+- `admin.html` password gating is client-side for internal convenience only; use stricter auth if this is exposed publicly.

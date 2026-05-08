@@ -12,6 +12,7 @@ import {
   updateDoc,
 } from './firebase.js';
 
+// Internal static-site gate only. This does not replace server-side authentication.
 const ADMIN_PASSWORD = 'CHANGE_ME';
 const ACCESS_KEY = 'vladder_admin_access';
 const DEFAULT_PHOTO =
